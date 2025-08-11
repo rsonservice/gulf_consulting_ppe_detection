@@ -21,6 +21,12 @@ const nextConfig = {
         port: "8000",
         pathname: "/processed-images/**",
       },
+      {
+        protocol: "http",
+        hostname: "18.191.195.85",
+        port: "8000",
+        pathname: "/processed-images/**",
+      },
     ],
   },
 };

@@ -13,7 +13,7 @@ const path = require("path");
 
 const app = express();
 const port = process.env.PORT || 8000; // Or any other desired port
-const serverUrl = process.env.SERVER_URL || `http://localhost:${port}`;
+const serverUrl = process.env.SERVER_URL || `http://18.191.195.85:${port}`;
 
 // Configure multer for file uploads
 const upload = multer({ dest: "uploads/" });
