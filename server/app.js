@@ -1,7 +1,10 @@
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const AWS = require("aws-sdk");
+const {
+  RekognitionClient,
+  DetectProtectiveEquipmentCommand,
+} = require("@aws-sdk/client-rekognition");
 const fs = require("fs");
 const sharp = require("sharp");
 const { createCanvas, loadImage } = require("canvas");
@@ -38,11 +41,9 @@ app.use("/processed-images", express.static(processedImagesDir));
 require("dotenv").config();
 
 // AWS config
-AWS.config.update({
+const rekognitionClient = new RekognitionClient({
   region: process.env.AWS_REGION,
 });
-
-const rekognition = new AWS.Rekognition();
 
 // Function to clean up generated files
 function cleanupFiles(filePaths) {
@@ -220,17 +221,6 @@ function getDetectionColor(isDetected, coversBodyPart = null) {
   return "#FF0000"; // Red
 }
 
-// Function to get color for different equipment types (deprecated - keeping for backward compatibility)
-function getEquipmentColor(equipmentType) {
-  const colors = {
-    HEAD_COVER: "#FF6B6B",
-    FACE_COVER: "#4ECDC4",
-    HAND_COVER: "#45B7D1",
-    default: "#FFA07A",
-  };
-  return colors[equipmentType] || colors.default;
-}
-
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", message: "PPE Detection API is running" });
 });
@@ -253,108 +243,95 @@ app.post("/api/detect", upload.single("image"), async (req, res) => {
       },
     };
 
-    rekognition.detectProtectiveEquipment(params, async (err, data) => {
-      if (err) {
-        fs.unlinkSync(imagePath); // cleanup temp file
-        console.error("Rekognition Error:", err);
-        return res.status(500).json({
-          success: false,
-          error: "Failed to process image with AWS Rekognition",
-          message: err.message,
-        });
-      }
+    try {
+      const command = new DetectProtectiveEquipmentCommand(params);
+      const data = await rekognitionClient.send(command);
 
-      try {
-        // Process each person's image
-        const generatedFiles = []; // Initialize array to track generated files
-        const results = await Promise.all(
-          (data.Persons || []).map(async (person, idx) => {
-            const bodyParts = person.BodyParts || [];
+      // Process each person's image
+      const generatedFiles = []; // Initialize array to track generated files
+      const results = await Promise.all(
+        (data.Persons || []).map(async (person, idx) => {
+          const bodyParts = person.BodyParts || [];
 
-            const getStatus = (type) => {
-              const part = bodyParts.find((p) =>
-                p.EquipmentDetections.some((eq) => eq.Type === type)
-              );
-              const detection =
-                part && part.EquipmentDetections.find((eq) => eq.Type === type);
-              return detection
-                ? {
-                    status: "Detected",
-                    confidence: Math.round(detection.Confidence),
-                  }
-                : {
-                    status: "Not Detected",
-                    confidence: part ? Math.round(part.Confidence) : 0,
-                  };
-            };
-
-            // Generate cropped image with equipment bounding boxes
-            const processedImageUrl = await processPersonImage(
-              imagePath,
-              person,
-              imageMetadata,
-              generatedFiles // Pass generatedFiles array
+          const getStatus = (type) => {
+            const part = bodyParts.find((p) =>
+              p.EquipmentDetections.some((eq) => eq.Type === type)
             );
+            const detection =
+              part && part.EquipmentDetections.find((eq) => eq.Type === type);
+            return detection
+              ? {
+                  status: "Detected",
+                  confidence: Math.round(detection.Confidence),
+                }
+              : {
+                  status: "Not Detected",
+                  confidence: part ? Math.round(part.Confidence) : 0,
+                };
+          };
 
-            return {
-              personId: idx + 1,
-              confidence: Math.round(person.Confidence),
-              image: processedImageUrl,
-              boundingBox: {
-                x: person.BoundingBox.Left,
-                y: person.BoundingBox.Top,
-                width: person.BoundingBox.Width,
-                height: person.BoundingBox.Height,
-              },
-              hardHat: getStatus("HEAD_COVER"),
-              // Note: AWS Rekognition does not detect eye protection (goggles)
-              // If you need to detect safety goggles, consider using Amazon Rekognition Custom Labels
-              goggles: { status: "Not Supported", confidence: 0 },
-              faceMask: getStatus("FACE_COVER"),
-              handProtectionL: getStatus("HAND_COVER"),
-              handProtectionR: getStatus("HAND_COVER"),
-              // Note: AWS Rekognition does not detect safety vests, boots, or other specialized PPE
-              // For these items, consider using Amazon Rekognition Custom Labels
-              safetyVest: { status: "Not Supported", confidence: 0 },
-              boots: { status: "Not Supported", confidence: 0 },
-            };
-          })
-        );
+          // Generate cropped image with equipment bounding boxes
+          const processedImageUrl = await processPersonImage(
+            imagePath,
+            person,
+            imageMetadata,
+            generatedFiles // Pass generatedFiles array
+          );
 
-        fs.unlinkSync(imagePath); // cleanup temp file
-
-        res.json({
-          success: true,
-          data: {
-            results,
-            processing_time: 1.2, // Optional: replace with actual measured time
-            image_metadata: {
-              width: imageMetadata.width,
-              height: imageMetadata.height,
-              format: imageMetadata.format,
+          return {
+            personId: idx + 1,
+            confidence: Math.round(person.Confidence),
+            image: processedImageUrl,
+            boundingBox: {
+              x: person.BoundingBox.Left,
+              y: person.BoundingBox.Top,
+              width: person.BoundingBox.Width,
+              height: person.BoundingBox.Height,
             },
-          },
-          message: "PPE detection completed successfully",
-        });
+            hardHat: getStatus("HEAD_COVER"),
+            // Note: AWS Rekognition does not detect eye protection (goggles)
+            // If you need to detect safety goggles, consider using Amazon Rekognition Custom Labels
+            goggles: { status: "Not Supported", confidence: 0 },
+            faceMask: getStatus("FACE_COVER"),
+            handProtectionL: getStatus("HAND_COVER"),
+            handProtectionR: getStatus("HAND_COVER"),
+            // Note: AWS Rekognition does not detect safety vests, boots, or other specialized PPE
+            // For these items, consider using Amazon Rekognition Custom Labels
+            safetyVest: { status: "Not Supported", confidence: 0 },
+            boots: { status: "Not Supported", confidence: 0 },
+          };
+        })
+      );
 
-        // Clean up generated files after a delay to allow frontend to load images
-        setTimeout(() => {
-          cleanupFiles(generatedFiles);
-        }, 60000); // 60 seconds delay
-      } catch (processingError) {
-        fs.unlinkSync(imagePath); // cleanup temp file
-        // Clean up any generated files in case of error
-        if (typeof generatedFiles !== "undefined") {
-          cleanupFiles(generatedFiles);
-        }
-        console.error("Error processing images:", processingError);
-        res.status(500).json({
-          success: false,
-          error: "Error processing person images",
-          message: processingError.message,
-        });
-      }
-    });
+      fs.unlinkSync(imagePath); // cleanup temp file
+
+      res.json({
+        success: true,
+        data: {
+          results,
+          processing_time: 1.2, // Optional: replace with actual measured time
+          image_metadata: {
+            width: imageMetadata.width,
+            height: imageMetadata.height,
+            format: imageMetadata.format,
+          },
+        },
+        message: "PPE detection completed successfully",
+      });
+
+      // Clean up generated files after a delay to allow frontend to load images
+      setTimeout(() => {
+        cleanupFiles(generatedFiles);
+      }, 60000); // 60 seconds delay
+    } catch (rekognitionError) {
+      fs.unlinkSync(imagePath); // cleanup temp file
+      console.error("Rekognition Error:", rekognitionError);
+      return res.status(500).json({
+        success: false,
+        error: "Failed to process image with AWS Rekognition",
+        message: rekognitionError.message,
+      });
+    }
   } catch (error) {
     console.error("Error:", error);
     res.status(500).json({
