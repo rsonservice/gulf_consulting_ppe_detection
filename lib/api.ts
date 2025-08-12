@@ -1,6 +1,6 @@
 // API configuration and utilities for PPE Detection Backend
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://18.191.195.85:8000/api";
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://192.168.24.128:8000/api";
 
 // Types for API requests and responses
 export interface PPEDetectionRequest {
@@ -34,10 +34,6 @@ export interface DetectionResult {
     height: number;
   };
   hardHat: {
-    status: "Detected" | "Not Detected" | "Indeterminate";
-    confidence: number;
-  };
-  goggles: {
     status: "Detected" | "Not Detected" | "Indeterminate";
     confidence: number;
   };

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Upload,
+  ArrowDown,
   ArrowUp,
   FileText,
   AlertCircle,
@@ -101,6 +102,31 @@ export default function PPEDetectionApp() {
     }
   };
 
+  // Function to process detection results and apply threshold logic
+  const processDetectionResults = (
+    results: DetectionResult[],
+    threshold: number
+  ): DetectionResult[] => {
+    return results.map((result) => {
+      const processedResult = { ...result };
+
+      // Check each PPE item against the threshold
+      ["hardHat", "faceMask", "handProtectionL", "handProtectionR"].forEach(
+        (ppeItem) => {
+          const item = processedResult[ppeItem as keyof DetectionResult] as any;
+          if (item && typeof item === "object" && "confidence" in item) {
+            // If confidence is below threshold and status is "Detected", mark as "Indeterminate"
+            if (item.confidence < threshold && item.status === "Detected") {
+              item.status = "Indeterminate";
+            }
+          }
+        }
+      );
+
+      return processedResult;
+    });
+  };
+
   const processImage = async () => {
     if (!uploadedFile || !uploadedImage) {
       setError("Please upload an image first");
@@ -120,7 +146,12 @@ export default function PPEDetectionApp() {
       const response = await ppeAPI.detectPPE(uploadedFile, confidence);
 
       if (response.success && response.data.results) {
-        setResults(response.data.results);
+        // Process results to apply threshold logic for indeterminate status
+        const processedResults = processDetectionResults(
+          response.data.results,
+          confidence
+        );
+        setResults(processedResults);
         setError(null);
       } else {
         setError(response.error || "Detection failed");
@@ -146,14 +177,18 @@ export default function PPEDetectionApp() {
       case "Not Detected":
         return "text-red-600";
       case "Indeterminate":
-        return "text-yellow-600";
+        return "text-yellow-600 font-bold";
       default:
         return "text-gray-600";
     }
   };
 
   const increaseConfidence = () => {
-    setConfidence((prev) => Math.min(100, prev + 5));
+    setConfidence((prev) => Math.min(95, prev + 5));
+  };
+
+  const decreaseConfidence = () => {
+    setConfidence((prev) => Math.max(50, prev - 5));
   };
 
   return (
@@ -190,7 +225,7 @@ export default function PPEDetectionApp() {
               <div className="bg-gray-50 p-4 border border-gray-300 text-sm">
                 <p className="font-semibold mb-2">
                   Detection of Personal Protective Equipment (PPE) covering
-                  Head, Eyes, Face and Hands
+                  Head, Face and Hands
                 </p>
                 <div className="space-y-1">
                   <p className="font-semibold">Instructions:</p>
@@ -199,9 +234,9 @@ export default function PPEDetectionApp() {
                     .png. Video must be .mp4 or .mov).
                   </p>
                   <p>
-                    2. Select required confidence level in accuracy of
-                    prediction about presence of PPE, persons, and body parts in
-                    an image.
+                    2. Select the required minimum confidence threshold (50 –
+                    95%) regarding the detection of PPE on a body part to be
+                    included in the summary results.
                   </p>
                   <p>3. Click "Go" to see detection results.</p>
                 </div>
@@ -264,10 +299,19 @@ export default function PPEDetectionApp() {
                       value={confidence}
                       onChange={(e) => setConfidence(Number(e.target.value))}
                       className="w-20 text-center"
-                      min="0"
-                      max="100"
+                      min="50"
+                      max="95"
                     />
                     <span>%</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={decreaseConfidence}
+                      className="p-1 bg-transparent"
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </Button>
+
                     <Button
                       variant="outline"
                       size="sm"
@@ -309,7 +353,7 @@ export default function PPEDetectionApp() {
                           key={result.personId}
                           className="flex space-x-4 border border-gray-200 p-3 bg-white rounded"
                         >
-                          {/* Person Image with Bounding Boxes */}
+                          {/* Person Image */}
                           <div className="flex-shrink-0">
                             <Image
                               src={result.image || "/placeholder.svg"}
@@ -338,17 +382,7 @@ export default function PPEDetectionApp() {
                                   {result.hardHat.confidence}%)
                                 </span>
                               </div>
-                              <div className="flex justify-between">
-                                <span className="font-medium">Goggles –</span>
-                                <span
-                                  className={`font-semibold ${getStatusColor(
-                                    result.goggles.status
-                                  )}`}
-                                >
-                                  {result.goggles.status} (
-                                  {result.goggles.confidence}%)
-                                </span>
-                              </div>
+
                               <div className="flex justify-between">
                                 <span className="font-medium">Face Mask –</span>
                                 <span

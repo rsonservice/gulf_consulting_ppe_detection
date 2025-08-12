@@ -13,7 +13,7 @@ const path = require("path");
 
 const app = express();
 const port = process.env.PORT || 8000; // Or any other desired port
-const serverUrl = process.env.SERVER_URL || `http://18.191.195.85:${port}`;
+const serverUrl = process.env.SERVER_URL || `http://localhost:${port}`;
 
 // Configure multer for file uploads
 const upload = multer({ dest: "uploads/" });
@@ -87,7 +87,8 @@ async function processPersonImage(
   originalImagePath,
   person,
   imageMetadata,
-  generatedFiles
+  generatedFiles,
+  confidenceThreshold = 80
 ) {
   try {
     const { width: imgWidth, height: imgHeight } = imageMetadata;
@@ -115,63 +116,42 @@ async function processPersonImage(
         ) {
           bodyPart.EquipmentDetections.forEach((equipment) => {
             if (equipment.BoundingBox) {
-              // Calculate equipment bounding box in full image coordinates
-              const eqX = equipment.BoundingBox.Left * imgWidth;
-              const eqY = equipment.BoundingBox.Top * imgHeight;
-              const eqWidth = equipment.BoundingBox.Width * imgWidth;
-              const eqHeight = equipment.BoundingBox.Height * imgHeight;
+              // Determine detection status based on confidence threshold
+              const confidence = Math.round(equipment.Confidence);
+              let status = "Not Detected";
 
-              // Set drawing style based on detection status (green=detected, orange=indeterminate, red=not detected)
-              const detectionColor = getDetectionColor(
-                true,
-                equipment.CoversBodyPart
-              );
-              fullCtx.strokeStyle = detectionColor;
-              fullCtx.lineWidth = 3; // Slightly thicker for visibility
-              fullCtx.fillStyle = detectionColor + "20"; // Semi-transparent
+              if (confidence >= confidenceThreshold) {
+                status = "Detected";
+              } else if (confidence > 0) {
+                status = "Indeterminate";
+              }
 
-              // Draw rectangle
-              fullCtx.fillRect(eqX, eqY, eqWidth, eqHeight);
-              fullCtx.strokeRect(eqX, eqY, eqWidth, eqHeight);
+              // Only draw bounding boxes for "Detected" and "Indeterminate" items
+              if (status === "Detected" || status === "Indeterminate") {
+                // Calculate equipment bounding box in full image coordinates
+                const eqX = equipment.BoundingBox.Left * imgWidth;
+                const eqY = equipment.BoundingBox.Top * imgHeight;
+                const eqWidth = equipment.BoundingBox.Width * imgWidth;
+                const eqHeight = equipment.BoundingBox.Height * imgHeight;
+
+                // Set color based on status: Green for Detected, Yellow for Indeterminate
+                const detectionColor =
+                  status === "Detected" ? "#00FF00" : "#FFFF00"; // Green or Yellow
+                fullCtx.strokeStyle = detectionColor;
+                fullCtx.lineWidth = 3; // Slightly thicker for visibility
+                fullCtx.fillStyle = detectionColor + "20"; // Semi-transparent
+
+                // Draw rectangle
+                fullCtx.fillRect(eqX, eqY, eqWidth, eqHeight);
+                fullCtx.strokeRect(eqX, eqY, eqWidth, eqHeight);
+              }
             }
           });
         }
       });
 
-      // Draw indicators for missing required PPE on body parts without equipment
-      const requiredEquipmentTypes = ["FACE_COVER", "HAND_COVER", "HEAD_COVER"];
-      const detectedTypes = new Set();
-
-      // Collect all detected equipment types
-      person.BodyParts.forEach((bodyPart) => {
-        if (bodyPart.EquipmentDetections) {
-          bodyPart.EquipmentDetections.forEach((equipment) => {
-            detectedTypes.add(equipment.Type);
-          });
-        }
-      });
-
-      // Draw red indicators for missing required PPE
-      requiredEquipmentTypes.forEach((requiredType, index) => {
-        if (!detectedTypes.has(requiredType)) {
-          // Position indicator on the person's bounding box
-          const personX = person.BoundingBox.Left * imgWidth;
-          const personY = person.BoundingBox.Top * imgHeight;
-          const personWidth = person.BoundingBox.Width * imgWidth;
-
-          const indicatorX = personX + index * 80; // Space out indicators
-          const indicatorY = personY - 10;
-
-          // Draw red warning indicator for missing PPE
-          fullCtx.strokeStyle = "#FF0000";
-          fullCtx.lineWidth = 2;
-          fullCtx.fillStyle = "#FF000030";
-
-          // Draw a small warning box
-          fullCtx.fillRect(indicatorX, indicatorY - 20, 75, 20);
-          fullCtx.strokeRect(indicatorX, indicatorY - 20, 75, 20);
-        }
-      });
+      // Note: Only drawing bounding boxes for detected and indeterminate items
+      // Removed red indicators for missing PPE to keep visualization clean
     }
 
     // Now crop the person region from the annotated full image
@@ -275,7 +255,8 @@ app.post("/api/detect", upload.single("image"), async (req, res) => {
             imagePath,
             person,
             imageMetadata,
-            generatedFiles // Pass generatedFiles array
+            generatedFiles, // Pass generatedFiles array
+            confidenceThreshold // Pass confidence threshold for bounding box logic
           );
 
           return {
@@ -289,9 +270,6 @@ app.post("/api/detect", upload.single("image"), async (req, res) => {
               height: person.BoundingBox.Height,
             },
             hardHat: getStatus("HEAD_COVER"),
-            // Note: AWS Rekognition does not detect eye protection (goggles)
-            // If you need to detect safety goggles, consider using Amazon Rekognition Custom Labels
-            goggles: { status: "Not Supported", confidence: 0 },
             faceMask: getStatus("FACE_COVER"),
             handProtectionL: getStatus("HAND_COVER"),
             handProtectionR: getStatus("HAND_COVER"),
