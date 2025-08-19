@@ -7,6 +7,10 @@
 /.next/
 /out/
 
+/server/node_modules
+/server/processed-images
+/server/uploads
+
 # production
 /build
 

@@ -23,6 +23,7 @@ import {
   validateImageFile,
   fileToBase64,
 } from "@/lib/api";
+import { generatePPEDetectionPDF } from "@/lib/pdf-utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function PPEDetectionApp() {
@@ -189,6 +190,25 @@ export default function PPEDetectionApp() {
 
   const decreaseConfidence = () => {
     setConfidence((prev) => Math.max(50, prev - 5));
+  };
+
+  const handlePrintToPDF = async () => {
+    if (results.length === 0) {
+      setError("No detection results to print. Please process an image first.");
+      return;
+    }
+
+    try {
+      await generatePPEDetectionPDF({
+        results,
+        originalImage: uploadedImage || undefined,
+        confidence,
+        timestamp: new Date(),
+      });
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      setError("Failed to generate PDF. Please try again.");
+    }
   };
 
   return (
@@ -429,7 +449,10 @@ export default function PPEDetectionApp() {
 
                   {/* Print to PDF Button */}
                   <div className="text-right">
-                    <Button className="bg-yellow-400 hover:bg-yellow-500 text-black font-bold px-8 py-2">
+                    <Button
+                      onClick={handlePrintToPDF}
+                      className="bg-yellow-400 hover:bg-yellow-500 text-black font-bold px-8 py-2"
+                    >
                       <FileText className="mr-2 h-4 w-4" />
                       Print to PDF
                     </Button>
