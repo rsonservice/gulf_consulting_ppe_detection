@@ -13,7 +13,7 @@ const path = require("path");
 
 const app = express();
 const port = process.env.PORT || 8000; // Or any other desired port
-const serverUrl = process.env.SERVER_URL || `http://localhost:${port}`;
+const serverUrl = process.env.SERVER_URL || `http://3.137.168.65:${port}`;
 
 // Configure multer for file uploads
 const upload = multer({ dest: "uploads/" });
@@ -375,6 +375,6 @@ setInterval(() => {
 }, 300000); // Run every 5 minutes
 
 app.listen(port, () => {
-  console.log(`PPE Detection API Server listening at http://localhost:${port}`);
-  console.log(`Health check available at: http://localhost:${port}/api/health`);
+  console.log(`PPE Detection API Server listening at http://3.137.168.65:${port}`);
+  console.log(`Health check available at: http://3.137.168.65:${port}/api/health`);
 });

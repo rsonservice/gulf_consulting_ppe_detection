@@ -52,15 +52,19 @@ export async function generatePPEDetectionPDF(
   currentY += 5;
   pdf.setFontSize(11);
   pdf.setFont("helvetica", "bold");
-  pdf.text("REPORT DETAILS", margin + 5, currentY + 5);
+  pdf.text("REPORT DETAILS", margin + 10, currentY + 3);
 
   pdf.setFont("helvetica", "normal");
   currentY += 8;
-  pdf.text(`Generated: ${timestamp.toLocaleString()}`, margin + 5, currentY);
+  pdf.text(`Generated: ${timestamp.toLocaleString()}`, margin + 10, currentY);
   currentY += 6;
-  pdf.text(`Confidence Threshold: ${confidence}%`, margin + 5, currentY);
-  pdf.text(`Persons Detected: ${results.length}`, margin + 80, currentY);
-  currentY += 15;
+  
+  // Align confidence and persons detected on opposite sides with consistent padding
+  const leftPadding = margin + 10;
+  const rightPadding = pageWidth - margin - 10;
+  pdf.text(`Confidence Threshold: ${confidence}%`, leftPadding, currentY);
+  pdf.text(`Persons Detected: ${results.length}`, rightPadding, currentY, { align: "right" });
+  currentY += 12;
 
   // Add original image if available
   if (originalImage) {
@@ -103,7 +107,7 @@ export async function generatePPEDetectionPDF(
       pdf.rect(imgX - 2, currentY - 2, imgWidth + 4, imgHeight + 4, "S");
 
       pdf.addImage(originalImage, "JPEG", imgX, currentY, imgWidth, imgHeight);
-      currentY += imgHeight + 20;
+      currentY += imgHeight + 12;
     } catch (error) {
       console.warn("Could not add original image to PDF:", error);
       pdf.setTextColor(255, 0, 0);
@@ -118,20 +122,27 @@ export async function generatePPEDetectionPDF(
   pdf.setFont("helvetica", "bold");
   pdf.setTextColor(52, 73, 94);
   pdf.text("DETECTION RESULTS", margin, currentY);
-  currentY += 15;
+  currentY += 8;
 
   // Add detection results for each person
   for (let i = 0; i < results.length; i++) {
     const result = results[i];
 
-    // Check if we need a new page (allow more space for each person)
-    if (currentY > pageHeight - 140) {
+    // More aggressive page break logic - only break if absolutely necessary
+    if (currentY > pageHeight - 100) {
       pdf.addPage();
-      currentY = margin + 15;
+      currentY = margin;
+      
+      // Add "DETECTION RESULTS (continued)" on new page
+      pdf.setFontSize(16);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(52, 73, 94);
+      pdf.text("DETECTION RESULTS (continued)", margin, currentY);
+      currentY += 8;
     }
 
     // Create a professional card for each person
-    const cardHeight = 100;
+    const cardHeight = 95;
     const cardWidth = pageWidth - 2 * margin;
 
     // Card background with shadow effect
@@ -173,9 +184,9 @@ export async function generatePPEDetectionPDF(
           personImg.src = result.image;
         });
 
-        // Calculate person image dimensions - make it larger and properly sized
-        const maxPersonImgWidth = 70;
-        const maxPersonImgHeight = 65;
+        // Calculate person image dimensions - optimize for space
+        const maxPersonImgWidth = 65;
+        const maxPersonImgHeight = 60;
         const personAspectRatio = personImg.width / personImg.height;
 
         let personImgWidth = maxPersonImgWidth;
@@ -200,9 +211,9 @@ export async function generatePPEDetectionPDF(
         );
 
         // Create professional table next to the image
-        const tableX = margin + personImgWidth + 20;
+        const tableX = margin + personImgWidth + 15;
         const tableY = contentY;
-        const tableWidth = cardWidth - personImgWidth - 35;
+        const tableWidth = cardWidth - personImgWidth - 30;
         const rowHeight = 12;
 
         // Table header with dark background
@@ -320,7 +331,7 @@ export async function generatePPEDetectionPDF(
       );
     }
 
-    currentY += cardHeight + 15;
+    currentY += cardHeight + 6;
   }
 
   // Add footer

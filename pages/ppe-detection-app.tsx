@@ -250,8 +250,8 @@ export default function PPEDetectionApp() {
                 <div className="space-y-1">
                   <p className="font-semibold">Instructions:</p>
                   <p>
-                    1. Drag and drop an image or video (Image must be .jpeg or
-                    .png. Video must be .mp4 or .mov).
+                    1. Drag and drop an image (Image must be .jpeg or
+                    .png.).
                   </p>
                   <p>
                     2. Select the required minimum confidence threshold (50 –
@@ -290,10 +290,10 @@ export default function PPEDetectionApp() {
                   >
                     <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                     <p className="text-gray-600">
-                      Drag and drop an image or video here
+                      Drag and drop an image here
                     </p>
                     <p className="text-sm text-gray-500 mt-2">
-                      Supports .jpeg, .png, .mp4, .mov formats
+                      Supports .jpeg, .png formats
                     </p>
                   </div>
                 )}

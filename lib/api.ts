@@ -1,6 +1,6 @@
 // API configuration and utilities for PPE Detection Backend
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://192.168.24.128:8000/api";
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://3.137.168.65:8000/api";
 
 // Types for API requests and responses
 export interface PPEDetectionRequest {
