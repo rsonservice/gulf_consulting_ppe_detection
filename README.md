@@ -206,14 +206,6 @@ MAX_FILE_SIZE=10MB
 
 This project is proprietary software developed by Gulf Consulting. All rights reserved.
 
-## Support & Contact
-
-For technical support, feature requests, or enterprise licensing:
-
-- **Email**: support@gulf-consulting.com
-- **Documentation**: [Internal Wiki](https://wiki.gulf-consulting.com/ppe-detection)
-- **Issue Tracking**: Internal JIRA system
-
 ---
 
 _Built with ❤️ by Gulf Consulting Engineering Team_
