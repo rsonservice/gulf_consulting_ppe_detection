@@ -50,7 +50,7 @@ function cleanupFiles(filePaths) {
   filePaths.forEach((filePath) => {
     try {
       if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+        // fs.unlinkSync(filePath);
         console.log(`Cleaned up file: ${filePath}`);
       }
     } catch (error) {
@@ -67,7 +67,7 @@ function cleanupProcessedImages() {
       files.forEach((file) => {
         const filePath = path.join(processedImagesDir, file);
         try {
-          fs.unlinkSync(filePath);
+          // fs.unlinkSync(filePath);
           console.log(`Cleaned up processed image: ${filePath}`);
         } catch (error) {
           console.error(
@@ -173,6 +173,9 @@ async function processPersonImage(
     const filePath = path.join(processedImagesDir, fileName);
 
     fs.writeFileSync(filePath, croppedAnnotatedBuffer);
+    
+    // Set proper permissions for nginx to serve the file
+    fs.chmodSync(filePath, 0o644);
 
     // Track the generated file for cleanup
     generatedFiles.push(filePath);
@@ -281,7 +284,7 @@ app.post("/api/detect", upload.single("image"), async (req, res) => {
         })
       );
 
-      fs.unlinkSync(imagePath); // cleanup temp file
+      // fs.unlinkSync(imagePath); // cleanup temp file
 
       res.json({
         success: true,
@@ -302,7 +305,7 @@ app.post("/api/detect", upload.single("image"), async (req, res) => {
         cleanupFiles(generatedFiles);
       }, 60000); // 60 seconds delay
     } catch (rekognitionError) {
-      fs.unlinkSync(imagePath); // cleanup temp file
+      // fs.unlinkSync(imagePath); // cleanup temp file
       console.error("Rekognition Error:", rekognitionError);
       return res.status(500).json({
         success: false,
@@ -348,6 +351,59 @@ app.post("/api/cleanup", (req, res) => {
   }
 });
 
+// Debug endpoint to check file status
+app.get("/api/debug/files", (req, res) => {
+  try {
+    const uploadsPath = path.join(__dirname, "uploads");
+    const processedPath = path.join(__dirname, "processed-images");
+    
+    const uploadsFiles = fs.existsSync(uploadsPath) ? fs.readdirSync(uploadsPath) : [];
+    const processedFiles = fs.existsSync(processedPath) ? fs.readdirSync(processedPath) : [];
+    
+    // Get file details with timestamps
+    const getFileDetails = (dir, files) => {
+      return files.map(file => {
+        const filePath = path.join(dir, file);
+        const stats = fs.statSync(filePath);
+        return {
+          name: file,
+          size: stats.size,
+          created: stats.birthtime,
+          modified: stats.mtime,
+          ageMinutes: Math.round((Date.now() - stats.mtime.getTime()) / 60000)
+        };
+      });
+    };
+    
+    res.json({
+      success: true,
+      directories: {
+        uploads: {
+          path: uploadsPath,
+          exists: fs.existsSync(uploadsPath),
+          files: getFileDetails(uploadsPath, uploadsFiles)
+        },
+        processed: {
+          path: processedPath,
+          exists: fs.existsSync(processedPath),
+          files: getFileDetails(processedPath, processedFiles)
+        }
+      },
+      cleanup_settings: {
+        interval_minutes: 5,
+        max_age_minutes: 30
+      }
+    });
+  } catch (error) {
+    console.error("Debug files error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Debug failed",
+      message: error.message,
+    });
+  }
+});
+
 // Periodic cleanup - run every 5 minutes to clean up old files
 setInterval(() => {
   try {
@@ -359,8 +415,8 @@ setInterval(() => {
         const filePath = path.join(processedImagesDir, file);
         try {
           const stats = fs.statSync(filePath);
-          // Remove files older than 2 minutes
-          if (now - stats.mtime.getTime() > 120000) {
+          // Remove files older than 30 minutes
+          if (now - stats.mtime.getTime() > 1800000) {
             fs.unlinkSync(filePath);
             console.log(`Periodic cleanup: removed old file ${filePath}`);
           }
